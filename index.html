@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>NB-1 庫存管理系統</title>
+    <title>NB-1 庫存管理系統 Pro</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
@@ -12,14 +12,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* iOS 優化與捲軸隱藏 */
         body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
         .safe-top { padding-top: env(safe-area-inset-top); }
-        
-        /* 模式切換動畫 */
         .toggle-checkbox:checked { right: 0; border-color: #68D391; }
         .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
     </style>
@@ -30,15 +27,25 @@
         
         <header class="bg-white shadow-sm z-20 safe-top flex-none">
             <div class="flex justify-between items-center px-4 py-3">
-                <h1 class="text-lg font-bold tracking-wide">NB-1 庫存系統</h1>
+                <h1 class="text-lg font-bold tracking-wide">NB-1 庫存 Pro</h1>
                 
                 <div v-if="currentTab === 'pos'" class="flex items-center space-x-2">
-                    <span :class="{'text-green-600 font-bold': mode === 'IN', 'text-gray-400': mode !== 'IN'}">進貨 IN</span>
+                    <span :class="{'text-green-600 font-bold': mode === 'IN', 'text-gray-400': mode !== 'IN'}">進貨</span>
                     <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
                         <input type="checkbox" name="toggle" id="toggle" v-model="isOutMode" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out" :class="mode === 'OUT' ? 'right-0 border-red-500' : 'left-0 border-green-500'"/>
                         <label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors duration-300" :class="mode === 'OUT' ? 'bg-red-500' : 'bg-green-500'"></label>
                     </div>
-                    <span :class="{'text-red-600 font-bold': mode === 'OUT', 'text-gray-400': mode !== 'OUT'}">出貨 OUT</span>
+                    <span :class="{'text-red-600 font-bold': mode === 'OUT', 'text-gray-400': mode !== 'OUT'}">出貨</span>
+                </div>
+
+                <div v-if="currentTab === 'inventory'" class="flex space-x-3">
+                    <button @click="toggleLowStockFilter" :class="showLowStockOnly ? 'text-amber-500' : 'text-gray-400'">
+                        <i class="fa-solid fa-filter"></i>
+                        <span class="text-xs ml-1" v-if="showLowStockOnly">缺貨</span>
+                    </button>
+                    <button @click="exportCSV" class="text-blue-600">
+                        <i class="fa-solid fa-file-export"></i>
+                    </button>
                 </div>
             </div>
         </header>
@@ -52,7 +59,6 @@
                             @click="activeCategory = cat"
                             class="w-full py-4 px-2 text-xs font-medium border-l-4 transition-all duration-200 leading-tight"
                             :class="activeCategory === cat ? 'bg-white border-gray-800 shadow-sm' : 'border-transparent text-gray-500 hover:bg-gray-100'">
-                            
                             <div class="w-full h-2 rounded mb-2" :class="getCategoryColor(cat)"></div>
                             {{ cat }}
                         </button>
@@ -63,30 +69,24 @@
                             <div v-for="prod in filteredProducts" :key="prod.name" 
                                 @click="addToCart(prod)"
                                 class="border rounded-lg p-2 shadow-sm active:scale-95 transition-transform flex flex-col justify-between h-24 relative overflow-hidden">
-                                <div class="absolute top-0 right-0 px-2 py-0.5 text-xs text-white rounded-bl-lg"
-                                     :class="getStock(prod.name) > 0 ? 'bg-gray-400' : 'bg-red-500'">
-                                    存: {{ getStock(prod.name) }}
+                                <div class="absolute top-0 right-0 px-2 py-0.5 text-xs text-white rounded-bl-lg font-bold"
+                                     :class="getStockStatusColor(getStock(prod.name))">
+                                    {{ getStock(prod.name) }}
                                 </div>
                                 <h3 class="text-sm font-bold line-clamp-2 leading-snug">{{ prod.name }}</h3>
                                 <p class="text-right text-gray-500 text-xs mt-1">${{ formatPrice(prod.price) }}</p>
                             </div>
                         </div>
-                        <div v-if="filteredProducts.length === 0" class="text-center text-gray-400 mt-10">
-                            此分類無產品
-                        </div>
                     </div>
                 </div>
 
                 <div v-if="cart.length > 0" class="absolute bottom-0 w-full bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10 rounded-t-xl transition-transform duration-300">
-                    
                     <div v-if="isCartOpen" class="max-h-[50vh] overflow-y-auto p-4 bg-gray-50 border-b">
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="font-bold text-gray-700">購物清單 ({{ mode === 'IN' ? '進貨' : '出貨' }})</h3>
                             <button @click="clearCart" class="text-xs text-red-500"><i class="fa-solid fa-trash"></i> 清空</button>
                         </div>
-                        
-                        <input type="text" v-model="orderMemo" placeholder="訂單備忘錄 (例如：客戶姓名、進貨單號...)" class="w-full mb-3 p-2 border rounded text-sm focus:outline-none focus:border-blue-500">
-
+                        <input type="text" v-model="orderMemo" placeholder="訂單備忘錄..." class="w-full mb-3 p-2 border rounded text-sm focus:outline-none focus:border-blue-500">
                         <div v-for="(item, index) in cart" :key="index" class="flex justify-between items-center py-2 border-b last:border-0">
                             <div class="w-1/2">
                                 <div class="text-sm font-medium truncate">{{ item.name }}</div>
@@ -99,7 +99,6 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="p-4 flex items-center justify-between bg-white safe-bottom">
                         <div @click="isCartOpen = !isCartOpen" class="flex flex-col cursor-pointer">
                             <span class="text-xs text-gray-500 flex items-center">
@@ -118,17 +117,26 @@
             </div>
 
             <div v-show="currentTab === 'inventory'" class="h-full flex flex-col bg-white p-4">
-                <div class="mb-4 relative">
-                    <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400"></i>
-                    <input type="text" v-model="inventorySearch" placeholder="搜尋產品名稱..." class="w-full pl-10 pr-4 py-2 bg-gray-100 rounded-lg focus:outline-none">
+                <div class="mb-4 relative flex space-x-2">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400"></i>
+                        <input type="text" v-model="inventorySearch" placeholder="搜尋產品名稱..." class="w-full pl-10 pr-4 py-2 bg-gray-100 rounded-lg focus:outline-none">
+                    </div>
                 </div>
+                
+                <div class="flex space-x-4 text-xs text-gray-500 mb-2 px-2">
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-1"></span>正常</span>
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-amber-400 mr-1"></span>低於3</span>
+                    <span class="flex items-center"><span class="w-2 h-2 rounded-full bg-red-500 mr-1"></span>缺貨</span>
+                </div>
+
                 <div class="flex-1 overflow-y-auto hide-scrollbar">
                     <table class="w-full text-sm text-left">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 z-10">
                             <tr>
                                 <th class="px-2 py-3">產品名稱</th>
                                 <th class="px-2 py-3 text-right">售價</th>
-                                <th class="px-2 py-3 text-right">庫存</th>
+                                <th class="px-2 py-3 text-right">盤點庫存 <i class="fa-solid fa-pen ml-1 text-gray-400"></i></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -138,13 +146,19 @@
                                     <div class="text-xs text-gray-500">{{ prod.category }}</div>
                                 </td>
                                 <td class="px-2 py-3 text-right text-gray-500">${{ formatPrice(prod.price) }}</td>
-                                <td class="px-2 py-3 text-right font-bold" 
-                                    :class="getStock(prod.name) <= 0 ? 'text-red-500' : 'text-green-600'">
-                                    {{ getStock(prod.name) }}
+                                <td class="px-2 py-3 text-right">
+                                    <button @click="quickEditStock(prod)" 
+                                        class="font-bold py-1 px-3 rounded text-white min-w-[3rem]"
+                                        :class="getStockStatusColor(getStock(prod.name))">
+                                        {{ getStock(prod.name) }}
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                    <div v-if="filteredInventory.length === 0" class="text-center text-gray-400 mt-10">
+                        查無資料
+                    </div>
                 </div>
             </div>
 
@@ -153,13 +167,13 @@
                 <div v-if="transactions.length === 0" class="text-center text-gray-400 mt-10">暫無紀錄</div>
                 
                 <div v-for="record in sortedTransactions" :key="record.id" class="bg-white p-4 rounded-xl shadow-sm mb-4 border-l-4" 
-                     :class="record.type === 'IN' ? 'border-green-500' : 'border-red-500'">
+                     :class="getTransactionColor(record.type)">
                     
                     <div class="flex justify-between items-start mb-2">
                         <div>
                             <span class="text-xs font-bold px-2 py-1 rounded" 
-                                  :class="record.type === 'IN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
-                                {{ record.type === 'IN' ? '進貨' : '出貨' }}
+                                  :class="getTransactionBadgeClass(record.type)">
+                                {{ getTransactionLabel(record.type) }}
                             </span>
                             <span class="text-xs text-gray-400 ml-2">{{ formatDate(record.timestamp) }}</span>
                         </div>
@@ -183,10 +197,9 @@
                     <div class="border-t pt-2 mt-2">
                         <div v-for="item in record.items" class="flex justify-between text-sm py-0.5">
                             <span class="text-gray-700 truncate w-2/3">{{ item.name }}</span>
-                            <span class="font-mono">x{{ item.qty }}</span>
-                        </div>
-                        <div class="text-right font-bold mt-2 pt-2 border-t border-dashed">
-                            總計: ${{ formatPrice(record.total) }}
+                            <span class="font-mono" :class="record.type === 'CORRECT' ? 'text-blue-600' : ''">
+                                {{ record.type === 'CORRECT' ? '修正後: ' : 'x' }}{{ item.qty }}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -214,16 +227,14 @@
     <script>
         const { createApp } = Vue;
 
-        // 產品原始資料 (由使用者 Excel 轉入)
+        // 產品原始資料
         const RAW_PRODUCTS = [
-            // 晶鑽系列
             {cat:"晶鑽系列",name:"NB-1晶鑽肽撫紋緊緻露",price:3800},
             {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力豐潤緊實精華",price:16800},
             {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力潤采凝萃",price:25000},
             {cat:"晶鑽系列",name:"NB-1晶鑽彈力全效肌活霜",price:12500},
             {cat:"晶鑽系列",name:"NB-1晶鑽彈力亮眼精華",price:8800},
             {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力亮眼緊緻霜",price:5800},
-            // NB-1御妍系列
             {cat:"NB-1御妍系列",name:"NB-1活膚精華露",price:3900},
             {cat:"NB-1御妍系列",name:"NB-1活膚賦活素",price:13600},
             {cat:"NB-1御妍系列",name:"NB-1抗皺緊膚霜",price:5000},
@@ -251,7 +262,6 @@
             {cat:"NB-1御妍系列",name:"NB-1 抗皺緊膚4D面膜",price:3480},
             {cat:"NB-1御妍系列",name:"NB-1 臻亮白皙精華液",price:5000},
             {cat:"NB-1御妍系列",name:"NB-1 盈采臻亮面膜",price:4000},
-            // NB-1青春系列
             {cat:"NB-1青春系列",name:"NB-1青春活膚膠原基酸精華液",price:4900},
             {cat:"NB-1青春系列",name:"NB-1青春撫紋精華乳",price:3200},
             {cat:"NB-1青春系列",name:"NB-1青春Q彈水潤乳",price:2980},
@@ -282,7 +292,6 @@
             {cat:"NB-1青春系列",name:"NB-1青春無瑕潤妍BB霜",price:2400},
             {cat:"NB-1青春系列",name:"NB-1胺基酸洗髮乳(油)",price:750},
             {cat:"NB-1青春系列",name:"NB-1胺基酸洗髮乳(乾)",price:750},
-            // 山藥系列
             {cat:"山藥系列",name:"山藥膠原潤膚露",price:2600},
             {cat:"山藥系列",name:"山藥膠原緊緻液",price:6400},
             {cat:"山藥系列",name:"山藥膠原緊緻霜",price:4400},
@@ -292,7 +301,6 @@
             {cat:"山藥系列",name:"山藥膠原緊緻專業面膜",price:5500},
             {cat:"山藥系列",name:"山藥膠原身體美膚凝乳",price:1980},
             {cat:"山藥系列",name:"山藥膠原局部緊膚凝乳",price:1980},
-            // Dr.標靶系列
             {cat:"Dr.標靶系列",name:"標靶水光胜肽抗皺精萃液",price:19800},
             {cat:"Dr.標靶系列",name:"標靶水光胜肽潔皙精萃液",price:15300},
             {cat:"Dr.標靶系列",name:"標靶水光胜肽亮采精萃液",price:13000},
@@ -309,16 +317,13 @@
             {cat:"Dr.標靶系列",name:"標靶細緻毛孔敷面粉膜",price:7200},
             {cat:"Dr.標靶系列",name:"標靶修護敷面粉膜",price:7200},
             {cat:"Dr.標靶系列",name:"標靶水光百萃修護凝凍",price:2300},
-            // 童妍水光系列
             {cat:"童妍水光系列",name:"童妍水光標靶極線立提晶萃",price:9900},
             {cat:"童妍水光系列",name:"童妍水光標靶極亮晶瓷晶萃",price:6500},
             {cat:"童妍水光系列",name:"童妍水光標靶極淨煥膚晶萃",price:6500},
             {cat:"童妍水光系列",name:"童妍水光標靶極能活護晶萃",price:6500},
-            // NB-1胜肽水光
             {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導機能液",price:3980},
             {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導原粹",price:13800},
             {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導機能霜",price:7800},
-            // 超效保濕系列
             {cat:"超效保濕系列",name:"超效保濕水光精華露",price:2980},
             {cat:"超效保濕系列",name:"超效保濕水光精華液",price:2280},
             {cat:"超效保濕系列",name:"超效保濕甦活水凝霜",price:2180},
@@ -329,7 +334,6 @@
             {cat:"超效保濕系列",name:"超效保濕按摩卸妝膏",price:1180},
             {cat:"超效保濕系列",name:"超效保濕水光潔顏乳",price:1180},
             {cat:"超效保濕系列",name:"r-PGA超效保濕爆水氣墊面膜",price:1500},
-            // 生化系列
             {cat:"生化系列",name:"生化潔皙麗膚水",price:2100},
             {cat:"生化系列",name:"生化潔皙精華液",price:3900},
             {cat:"生化系列",name:"生化潔皙精華霜",price:3300},
@@ -364,7 +368,6 @@
             {cat:"生化系列",name:"物理性美白防曬隔離乳",price:2400},
             {cat:"生化系列",name:"生化保濕蜜粉(膚色)",price:1500},
             {cat:"生化系列",name:"生化保濕蜜粉(淺膚色)",price:1500},
-            // 漢方草本系列
             {cat:"漢方草本系列",name:"海藻麗膚水",price:920},
             {cat:"漢方草本系列",name:"海藻精華液",price:2400},
             {cat:"漢方草本系列",name:"海藻美膚霜",price:1400},
@@ -412,7 +415,6 @@
             {cat:"漢方草本系列",name:"護膚霜(B1)",price:640},
             {cat:"漢方草本系列",name:"麗膚霜(6B2)",price:690},
             {cat:"漢方草本系列",name:"潤膚霜(B42)",price:970},
-            // 專業系列
             {cat:"專業系列",name:"滋潤化妝水(清爽型)",price:780},
             {cat:"專業系列",name:"滋潤化妝水",price:780},
             {cat:"專業系列",name:"保濕乳液(清爽型)",price:1500},
@@ -440,7 +442,6 @@
             {cat:"專業系列",name:"天然精油洗手乳",price:570},
             {cat:"專業系列",name:"金縷梅沐浴乳",price:340},
             {cat:"專業系列",name:"酪梨油沐髮乳",price:350},
-            // 精油系列
             {cat:"精油系列",name:"淨化複方精油",price:1350},
             {cat:"精油系列",name:"平衡複方精油",price:1350},
             {cat:"精油系列",name:"細緻毛孔複方精油",price:1350},
@@ -492,21 +493,21 @@
                     categories: [],
                     products: RAW_PRODUCTS,
                     activeCategory: '',
-                    inventory: {}, // { 'Product Name': 10 }
+                    inventory: {}, 
                     transactions: [],
                     cart: [],
-                    isOutMode: true, // true = OUT (Red), false = IN (Green)
+                    isOutMode: true,
                     isCartOpen: true,
                     orderMemo: '',
                     inventorySearch: '',
+                    showLowStockOnly: false,
+                    safeStockThreshold: 3
                 }
             },
             created() {
-                // 初始化分類
                 this.categories = [...new Set(this.products.map(p => p.cat))];
                 this.activeCategory = this.categories[0];
                 
-                // 讀取本地資料
                 const savedInv = localStorage.getItem('nb1_inventory');
                 if (savedInv) this.inventory = JSON.parse(savedInv);
                 
@@ -521,9 +522,20 @@
                     return this.products.filter(p => p.cat === this.activeCategory);
                 },
                 filteredInventory() {
-                    if (!this.inventorySearch) return this.products;
-                    const term = this.inventorySearch.toLowerCase();
-                    return this.products.filter(p => p.name.toLowerCase().includes(term));
+                    let list = this.products;
+                    
+                    // 1. 搜尋過濾
+                    if (this.inventorySearch) {
+                        const term = this.inventorySearch.toLowerCase();
+                        list = list.filter(p => p.name.toLowerCase().includes(term));
+                    }
+
+                    // 2. 庫存狀態過濾
+                    if (this.showLowStockOnly) {
+                        list = list.filter(p => (this.inventory[p.name] || 0) < this.safeStockThreshold);
+                    }
+
+                    return list;
                 },
                 cartTotal() {
                     return this.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -549,6 +561,93 @@
                 getStock(name) {
                     return this.inventory[name] || 0;
                 },
+                // 新增：庫存狀態顏色
+                getStockStatusColor(qty) {
+                    if (qty <= 0) return 'bg-red-500 text-white';
+                    if (qty < this.safeStockThreshold) return 'bg-amber-400 text-white'; // 黃燈
+                    return 'bg-green-500 text-white';
+                },
+                // 新增：交易類型樣式
+                getTransactionColor(type) {
+                    if (type === 'IN') return 'border-green-500';
+                    if (type === 'OUT') return 'border-red-500';
+                    return 'border-blue-500'; // 校正
+                },
+                getTransactionBadgeClass(type) {
+                    if (type === 'IN') return 'bg-green-100 text-green-700';
+                    if (type === 'OUT') return 'bg-red-100 text-red-700';
+                    return 'bg-blue-100 text-blue-700'; // 校正
+                },
+                getTransactionLabel(type) {
+                    if (type === 'IN') return '進貨';
+                    if (type === 'OUT') return '出貨';
+                    return '盤點校正';
+                },
+                
+                // 新增：快速盤點邏輯
+                quickEditStock(prod) {
+                    const currentQty = this.getStock(prod.name);
+                    const newQtyStr = prompt(`請輸入「${prod.name}」的實際盤點數量：`, currentQty);
+                    
+                    if (newQtyStr === null) return; // 取消
+                    const newQty = parseInt(newQtyStr);
+                    
+                    if (isNaN(newQty) || newQty < 0) {
+                        alert("請輸入有效的正整數");
+                        return;
+                    }
+
+                    if (newQty === currentQty) return; // 沒變
+
+                    // 自動產生一筆「校正」紀錄
+                    const transaction = {
+                        id: Date.now(),
+                        timestamp: new Date().toISOString(),
+                        type: 'CORRECT',
+                        items: [{ name: prod.name, qty: newQty, oldQty: currentQty }],
+                        total: 0,
+                        memo: `快速盤點修正 (原: ${currentQty} -> 新: ${newQty})`,
+                        isEditing: false,
+                        tempMemo: ''
+                    };
+
+                    this.inventory[prod.name] = newQty;
+                    this.transactions.push(transaction);
+                    this.saveToLocal();
+                },
+
+                // 新增：匯出 CSV
+                exportCSV() {
+                    const headers = ["類別", "產品名稱", "建議售價", "目前庫存"];
+                    const rows = this.products.map(p => [
+                        p.cat,
+                        p.name,
+                        p.price,
+                        this.getStock(p.name)
+                    ]);
+                    
+                    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // BOM for Excel
+                    csvContent += headers.join(",") + "\n";
+                    
+                    rows.forEach(row => {
+                        csvContent += row.join(",") + "\n";
+                    });
+                    
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    const date = new Date().toISOString().slice(0,10);
+                    link.setAttribute("download", `NB1_Inventory_${date}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
+
+                toggleLowStockFilter() {
+                    this.showLowStockOnly = !this.showLowStockOnly;
+                },
+
+                // (原有功能保持不變)
                 addToCart(product) {
                     const existing = this.cart.find(item => item.name === product.name);
                     if (existing) {
@@ -577,14 +676,13 @@
                         id: Date.now(),
                         timestamp: new Date().toISOString(),
                         type: this.mode,
-                        items: JSON.parse(JSON.stringify(this.cart)), // Deep copy
+                        items: JSON.parse(JSON.stringify(this.cart)), 
                         total: this.cartTotal,
                         memo: this.orderMemo,
                         isEditing: false,
                         tempMemo: ''
                     };
 
-                    // 更新庫存
                     this.cart.forEach(item => {
                         const current = this.inventory[item.name] || 0;
                         if (this.mode === 'IN') {
@@ -602,17 +700,21 @@
                 deleteTransaction(record) {
                     if(!confirm('確定要刪除此紀錄嗎？庫存將會自動校正回滾。')) return;
 
-                    // 自動校正庫存 (反向操作)
-                    record.items.forEach(item => {
-                        const current = this.inventory[item.name] || 0;
-                        // 如果原本是進貨(IN)，刪除時就要扣掉(OUT邏輯)
-                        // 如果原本是出貨(OUT)，刪除時就要加回(IN邏輯)
-                        if (record.type === 'IN') {
-                            this.inventory[item.name] = current - item.qty;
-                        } else {
-                            this.inventory[item.name] = current + item.qty;
-                        }
-                    });
+                    // 若是盤點(CORRECT)，比較難回滾，目前簡單處理：不自動調整庫存，僅刪除紀錄
+                    // 或者可以設計更複雜邏輯，但為了穩定性，建議盤點單刪除不影響庫存，或提示使用者。
+                    // 這裡採用標準進銷貨回滾
+                    if (record.type === 'CORRECT') {
+                        alert('盤點紀錄刪除後，當前庫存數量不會改變。');
+                    } else {
+                        record.items.forEach(item => {
+                            const current = this.inventory[item.name] || 0;
+                            if (record.type === 'IN') {
+                                this.inventory[item.name] = current - item.qty;
+                            } else {
+                                this.inventory[item.name] = current + item.qty;
+                            }
+                        });
+                    }
 
                     this.transactions = this.transactions.filter(t => t.id !== record.id);
                     this.saveToLocal();
@@ -633,7 +735,6 @@
             }
         }).mount('#app');
         
-        // 註冊 Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js')
                 .then(() => console.log('SW Registered'));
