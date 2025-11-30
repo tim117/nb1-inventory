@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>NB-1 庫存管理系統</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* iOS 優化與捲軸隱藏 */
+        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        .safe-top { padding-top: env(safe-area-inset-top); }
+        
+        /* 模式切換動畫 */
+        .toggle-checkbox:checked { right: 0; border-color: #68D391; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden flex flex-col text-gray-800">
+
+    <div id="app" class="h-full flex flex-col">
+        
+        <header class="bg-white shadow-sm z-20 safe-top flex-none">
+            <div class="flex justify-between items-center px-4 py-3">
+                <h1 class="text-lg font-bold tracking-wide">NB-1 庫存系統</h1>
+                
+                <div v-if="currentTab === 'pos'" class="flex items-center space-x-2">
+                    <span :class="{'text-green-600 font-bold': mode === 'IN', 'text-gray-400': mode !== 'IN'}">進貨 IN</span>
+                    <div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="toggle" id="toggle" v-model="isOutMode" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 ease-in-out" :class="mode === 'OUT' ? 'right-0 border-red-500' : 'left-0 border-green-500'"/>
+                        <label for="toggle" class="toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors duration-300" :class="mode === 'OUT' ? 'bg-red-500' : 'bg-green-500'"></label>
+                    </div>
+                    <span :class="{'text-red-600 font-bold': mode === 'OUT', 'text-gray-400': mode !== 'OUT'}">出貨 OUT</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-hidden relative">
+            
+            <div v-show="currentTab === 'pos'" class="h-full flex flex-col">
+                <div class="flex-1 flex overflow-hidden">
+                    <div class="w-1/4 bg-gray-50 overflow-y-auto hide-scrollbar border-r">
+                        <button v-for="cat in categories" :key="cat" 
+                            @click="activeCategory = cat"
+                            class="w-full py-4 px-2 text-xs font-medium border-l-4 transition-all duration-200 leading-tight"
+                            :class="activeCategory === cat ? 'bg-white border-gray-800 shadow-sm' : 'border-transparent text-gray-500 hover:bg-gray-100'">
+                            
+                            <div class="w-full h-2 rounded mb-2" :class="getCategoryColor(cat)"></div>
+                            {{ cat }}
+                        </button>
+                    </div>
+
+                    <div class="w-3/4 bg-white overflow-y-auto p-2 pb-24">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div v-for="prod in filteredProducts" :key="prod.name" 
+                                @click="addToCart(prod)"
+                                class="border rounded-lg p-2 shadow-sm active:scale-95 transition-transform flex flex-col justify-between h-24 relative overflow-hidden">
+                                <div class="absolute top-0 right-0 px-2 py-0.5 text-xs text-white rounded-bl-lg"
+                                     :class="getStock(prod.name) > 0 ? 'bg-gray-400' : 'bg-red-500'">
+                                    存: {{ getStock(prod.name) }}
+                                </div>
+                                <h3 class="text-sm font-bold line-clamp-2 leading-snug">{{ prod.name }}</h3>
+                                <p class="text-right text-gray-500 text-xs mt-1">${{ formatPrice(prod.price) }}</p>
+                            </div>
+                        </div>
+                        <div v-if="filteredProducts.length === 0" class="text-center text-gray-400 mt-10">
+                            此分類無產品
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="cart.length > 0" class="absolute bottom-0 w-full bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10 rounded-t-xl transition-transform duration-300">
+                    
+                    <div v-if="isCartOpen" class="max-h-[50vh] overflow-y-auto p-4 bg-gray-50 border-b">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="font-bold text-gray-700">購物清單 ({{ mode === 'IN' ? '進貨' : '出貨' }})</h3>
+                            <button @click="clearCart" class="text-xs text-red-500"><i class="fa-solid fa-trash"></i> 清空</button>
+                        </div>
+                        
+                        <input type="text" v-model="orderMemo" placeholder="訂單備忘錄 (例如：客戶姓名、進貨單號...)" class="w-full mb-3 p-2 border rounded text-sm focus:outline-none focus:border-blue-500">
+
+                        <div v-for="(item, index) in cart" :key="index" class="flex justify-between items-center py-2 border-b last:border-0">
+                            <div class="w-1/2">
+                                <div class="text-sm font-medium truncate">{{ item.name }}</div>
+                                <div class="text-xs text-gray-500">${{ formatPrice(item.price) }}</div>
+                            </div>
+                            <div class="flex items-center space-x-3">
+                                <button @click="updateQty(index, -1)" class="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">-</button>
+                                <span class="font-bold w-6 text-center">{{ item.qty }}</span>
+                                <button @click="updateQty(index, 1)" class="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 flex items-center justify-between bg-white safe-bottom">
+                        <div @click="isCartOpen = !isCartOpen" class="flex flex-col cursor-pointer">
+                            <span class="text-xs text-gray-500 flex items-center">
+                                <i class="fa-solid" :class="isCartOpen ? 'fa-chevron-down' : 'fa-chevron-up'"></i>
+                                <span class="ml-1">共 {{ cartItemCount }} 項</span>
+                            </span>
+                            <span class="text-xl font-bold text-gray-800">${{ formatPrice(cartTotal) }}</span>
+                        </div>
+                        <button @click="checkout" 
+                            class="px-8 py-3 rounded-full text-white font-bold shadow-lg transform active:scale-95 transition-colors"
+                            :class="mode === 'OUT' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'">
+                            確認{{ mode === 'IN' ? '進貨' : '出貨' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-show="currentTab === 'inventory'" class="h-full flex flex-col bg-white p-4">
+                <div class="mb-4 relative">
+                    <i class="fa-solid fa-search absolute left-3 top-3 text-gray-400"></i>
+                    <input type="text" v-model="inventorySearch" placeholder="搜尋產品名稱..." class="w-full pl-10 pr-4 py-2 bg-gray-100 rounded-lg focus:outline-none">
+                </div>
+                <div class="flex-1 overflow-y-auto hide-scrollbar">
+                    <table class="w-full text-sm text-left">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                            <tr>
+                                <th class="px-2 py-3">產品名稱</th>
+                                <th class="px-2 py-3 text-right">售價</th>
+                                <th class="px-2 py-3 text-right">庫存</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="prod in filteredInventory" :key="prod.name" class="border-b hover:bg-gray-50">
+                                <td class="px-2 py-3">
+                                    <div class="font-medium text-gray-900">{{ prod.name }}</div>
+                                    <div class="text-xs text-gray-500">{{ prod.category }}</div>
+                                </td>
+                                <td class="px-2 py-3 text-right text-gray-500">${{ formatPrice(prod.price) }}</td>
+                                <td class="px-2 py-3 text-right font-bold" 
+                                    :class="getStock(prod.name) <= 0 ? 'text-red-500' : 'text-green-600'">
+                                    {{ getStock(prod.name) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-show="currentTab === 'history'" class="h-full flex flex-col bg-gray-100 p-4 overflow-y-auto pb-24">
+                <h2 class="text-xl font-bold mb-4 ml-1">交易紀錄</h2>
+                <div v-if="transactions.length === 0" class="text-center text-gray-400 mt-10">暫無紀錄</div>
+                
+                <div v-for="record in sortedTransactions" :key="record.id" class="bg-white p-4 rounded-xl shadow-sm mb-4 border-l-4" 
+                     :class="record.type === 'IN' ? 'border-green-500' : 'border-red-500'">
+                    
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <span class="text-xs font-bold px-2 py-1 rounded" 
+                                  :class="record.type === 'IN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
+                                {{ record.type === 'IN' ? '進貨' : '出貨' }}
+                            </span>
+                            <span class="text-xs text-gray-400 ml-2">{{ formatDate(record.timestamp) }}</span>
+                        </div>
+                        <button @click="deleteTransaction(record)" class="text-gray-400 hover:text-red-500 px-2">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+
+                    <div class="mb-2 text-sm text-gray-600 bg-gray-50 p-2 rounded flex justify-between items-center group">
+                        <span v-if="!record.isEditing" class="italic w-full">{{ record.memo || '無備註' }}</span>
+                        <input v-else v-model="record.tempMemo" class="bg-white border p-1 rounded w-full text-sm" />
+                        
+                        <button v-if="!record.isEditing" @click="startEdit(record)" class="ml-2 text-gray-400 hover:text-blue-500">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button v-else @click="saveEdit(record)" class="ml-2 text-green-500">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                    </div>
+
+                    <div class="border-t pt-2 mt-2">
+                        <div v-for="item in record.items" class="flex justify-between text-sm py-0.5">
+                            <span class="text-gray-700 truncate w-2/3">{{ item.name }}</span>
+                            <span class="font-mono">x{{ item.qty }}</span>
+                        </div>
+                        <div class="text-right font-bold mt-2 pt-2 border-t border-dashed">
+                            總計: ${{ formatPrice(record.total) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <nav class="bg-white border-t border-gray-200 flex justify-around items-center safe-bottom py-2 z-20">
+            <button @click="currentTab = 'pos'" class="flex flex-col items-center p-2 w-1/3" :class="currentTab === 'pos' ? 'text-blue-600' : 'text-gray-400'">
+                <i class="fa-solid fa-cash-register text-xl mb-1"></i>
+                <span class="text-xs">作業</span>
+            </button>
+            <button @click="currentTab = 'inventory'" class="flex flex-col items-center p-2 w-1/3" :class="currentTab === 'inventory' ? 'text-blue-600' : 'text-gray-400'">
+                <i class="fa-solid fa-boxes-stacked text-xl mb-1"></i>
+                <span class="text-xs">庫存</span>
+            </button>
+            <button @click="currentTab = 'history'" class="flex flex-col items-center p-2 w-1/3" :class="currentTab === 'history' ? 'text-blue-600' : 'text-gray-400'">
+                <i class="fa-solid fa-clock-rotate-left text-xl mb-1"></i>
+                <span class="text-xs">紀錄</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        // 產品原始資料 (由使用者 Excel 轉入)
+        const RAW_PRODUCTS = [
+            // 晶鑽系列
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽撫紋緊緻露",price:3800},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力豐潤緊實精華",price:16800},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力潤采凝萃",price:25000},
+            {cat:"晶鑽系列",name:"NB-1晶鑽彈力全效肌活霜",price:12500},
+            {cat:"晶鑽系列",name:"NB-1晶鑽彈力亮眼精華",price:8800},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力亮眼緊緻霜",price:5800},
+            // NB-1御妍系列
+            {cat:"NB-1御妍系列",name:"NB-1活膚精華露",price:3900},
+            {cat:"NB-1御妍系列",name:"NB-1活膚賦活素",price:13600},
+            {cat:"NB-1御妍系列",name:"NB-1抗皺緊膚霜",price:5000},
+            {cat:"NB-1御妍系列",name:"NB-1活膚緊實敷面軟膜組合",price:7200},
+            {cat:"NB-1御妍系列",name:"NB-1活膚緊實敷面組合",price:13300},
+            {cat:"NB-1御妍系列",name:"NB-1深層美白精華露",price:2980},
+            {cat:"NB-1御妍系列",name:"NB-1深層美白賦活素",price:11500},
+            {cat:"NB-1御妍系列",name:"NB-1深層美白精華乳",price:5800},
+            {cat:"NB-1御妍系列",name:"NB-1深層美白敷面軟膜組合",price:5200},
+            {cat:"NB-1御妍系列",name:"NB-1深層美白敷面組合",price:12300},
+            {cat:"NB-1御妍系列",name:"NB-1細緻毛孔精華露",price:2980},
+            {cat:"NB-1御妍系列",name:"NB-1細緻毛孔賦活素",price:7000},
+            {cat:"NB-1御妍系列",name:"NB-1面皰修護精華霜",price:4900},
+            {cat:"NB-1御妍系列",name:"NB-1細緻毛孔敷面軟膜組合",price:5200},
+            {cat:"NB-1御妍系列",name:"NB-1細緻毛孔敷面組合",price:11300},
+            {cat:"NB-1御妍系列",name:"NB-1修護舒敏精華露",price:2980},
+            {cat:"NB-1御妍系列",name:"NB-1修護舒敏賦活素",price:7000},
+            {cat:"NB-1御妍系列",name:"NB-1修護舒敏精華霜",price:4900},
+            {cat:"NB-1御妍系列",name:"NB-1修護舒敏敷面軟膜組合",price:5200},
+            {cat:"NB-1御妍系列",name:"NB-1修護舒敏敷面組合",price:11300},
+            {cat:"NB-1御妍系列",name:"NB-1 Plus駐顏奇肌白金精華素",price:40000},
+            {cat:"NB-1御妍系列",name:"NB-1 Plus盈采臻亮精華素",price:25000},
+            {cat:"NB-1御妍系列",name:"NB-1 Plus細緻精華素",price:19000},
+            {cat:"NB-1御妍系列",name:"NB-1 Plus修護精華素",price:9500},
+            {cat:"NB-1御妍系列",name:"NB-1 抗皺緊膚4D面膜",price:3480},
+            {cat:"NB-1御妍系列",name:"NB-1 臻亮白皙精華液",price:5000},
+            {cat:"NB-1御妍系列",name:"NB-1 盈采臻亮面膜",price:4000},
+            // NB-1青春系列
+            {cat:"NB-1青春系列",name:"NB-1青春活膚膠原基酸精華液",price:4900},
+            {cat:"NB-1青春系列",name:"NB-1青春撫紋精華乳",price:3200},
+            {cat:"NB-1青春系列",name:"NB-1青春Q彈水潤乳",price:2980},
+            {cat:"NB-1青春系列",name:"NB-1青春亮白胜肽精華液",price:4000},
+            {cat:"NB-1青春系列",name:"NB-1青春掃黑潤白精華液",price:3300},
+            {cat:"NB-1青春系列",name:"NB-1青春嫩白精華乳",price:2800},
+            {cat:"NB-1青春系列",name:"NB-1青春淨痘修護精華液",price:4000},
+            {cat:"NB-1青春系列",name:"NB-1青春深層修護細緻精華液",price:3250},
+            {cat:"NB-1青春系列",name:"NB-1青春細緻毛孔精華乳",price:2600},
+            {cat:"NB-1青春系列",name:"NB-1青春細緻毛孔修護凝膠",price:2300},
+            {cat:"NB-1青春系列",name:"NB-1青春細緻淨膚鼻組合",price:2800},
+            {cat:"NB-1青春系列",name:"NB-1青春平衡舒敏精華液",price:4000},
+            {cat:"NB-1青春系列",name:"NB-1青春強效保濕舒敏精華乳",price:2900},
+            {cat:"NB-1青春系列",name:"NB-1青春高效舒敏凝露面膜",price:1180},
+            {cat:"NB-1青春系列",name:"NB-1青春修護舒敏精華露",price:2400},
+            {cat:"NB-1青春系列",name:"NB-1青春修護舒敏精華液",price:2800},
+            {cat:"NB-1青春系列",name:"NB-1青春修護舒敏賦活素",price:8300},
+            {cat:"NB-1青春系列",name:"NB-1青春修護舒敏精華霜",price:2500},
+            {cat:"NB-1青春系列",name:"NB-1青春修護舒敏面膜",price:3800},
+            {cat:"NB-1青春系列",name:"NB-1保濕卸妝乳",price:1200},
+            {cat:"NB-1青春系列",name:"NB-1保濕洗面乳",price:1200},
+            {cat:"NB-1青春系列",name:"NB-1青春無痕眼部賦活素",price:5300},
+            {cat:"NB-1青春系列",name:"NB-1青春眼周撫紋精華乳",price:1600},
+            {cat:"NB-1青春系列",name:"NB-1眼唇護膜",price:2380},
+            {cat:"NB-1青春系列",name:"NB-1青春美眸眼膜",price:2200},
+            {cat:"NB-1青春系列",name:"NB-1青春全效煥采保濕面膜",price:2160},
+            {cat:"NB-1青春系列",name:"NB-1晶亮柔透粉底霜",price:2380},
+            {cat:"NB-1青春系列",name:"NB-1青春無瑕潤妍BB霜",price:2400},
+            {cat:"NB-1青春系列",name:"NB-1胺基酸洗髮乳(油)",price:750},
+            {cat:"NB-1青春系列",name:"NB-1胺基酸洗髮乳(乾)",price:750},
+            // 山藥系列
+            {cat:"山藥系列",name:"山藥膠原潤膚露",price:2600},
+            {cat:"山藥系列",name:"山藥膠原緊緻液",price:6400},
+            {cat:"山藥系列",name:"山藥膠原緊緻霜",price:4400},
+            {cat:"山藥系列",name:"山藥膠原日霜",price:3600},
+            {cat:"山藥系列",name:"山藥膠原緊緻眼周凝露",price:2600},
+            {cat:"山藥系列",name:"山藥膠原緊緻敷面組合",price:11250},
+            {cat:"山藥系列",name:"山藥膠原緊緻專業面膜",price:5500},
+            {cat:"山藥系列",name:"山藥膠原身體美膚凝乳",price:1980},
+            {cat:"山藥系列",name:"山藥膠原局部緊膚凝乳",price:1980},
+            // Dr.標靶系列
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽抗皺精萃液",price:19800},
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽潔皙精萃液",price:15300},
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽亮采精萃液",price:13000},
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽細緻抗痘精萃液",price:13000},
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽細緻毛孔精萃液",price:13000},
+            {cat:"Dr.標靶系列",name:"標靶水光修護精萃液",price:13000},
+            {cat:"Dr.標靶系列",name:"標靶水光舒緩精萃液",price:13000},
+            {cat:"Dr.標靶系列",name:"標靶水光玻尿酸精萃液",price:8500},
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽眼部精萃液",price:2600},
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽頸部精萃液",price:1200},
+            {cat:"Dr.標靶系列",name:"標靶水光胜肽手部精萃液",price:1200},
+            {cat:"Dr.標靶系列",name:"標靶抗皺敷面粉膜",price:7200},
+            {cat:"Dr.標靶系列",name:"標靶煥采敷面粉膜",price:7200},
+            {cat:"Dr.標靶系列",name:"標靶細緻毛孔敷面粉膜",price:7200},
+            {cat:"Dr.標靶系列",name:"標靶修護敷面粉膜",price:7200},
+            {cat:"Dr.標靶系列",name:"標靶水光百萃修護凝凍",price:2300},
+            // 童妍水光系列
+            {cat:"童妍水光系列",name:"童妍水光標靶極線立提晶萃",price:9900},
+            {cat:"童妍水光系列",name:"童妍水光標靶極亮晶瓷晶萃",price:6500},
+            {cat:"童妍水光系列",name:"童妍水光標靶極淨煥膚晶萃",price:6500},
+            {cat:"童妍水光系列",name:"童妍水光標靶極能活護晶萃",price:6500},
+            // NB-1胜肽水光
+            {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導機能液",price:3980},
+            {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導原粹",price:13800},
+            {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導機能霜",price:7800},
+            // 超效保濕系列
+            {cat:"超效保濕系列",name:"超效保濕水光精華露",price:2980},
+            {cat:"超效保濕系列",name:"超效保濕水光精華液",price:2280},
+            {cat:"超效保濕系列",name:"超效保濕甦活水凝霜",price:2180},
+            {cat:"超效保濕系列",name:"超效保濕滋養晚霜",price:2480},
+            {cat:"超效保濕系列",name:"物理性水光瑩潤防曬素顏乳",price:2580},
+            {cat:"超效保濕系列",name:"超效彈潤水光眼部賦活霜",price:2480},
+            {cat:"超效保濕系列",name:"超效彈潤水光眼部精萃",price:2680},
+            {cat:"超效保濕系列",name:"超效保濕按摩卸妝膏",price:1180},
+            {cat:"超效保濕系列",name:"超效保濕水光潔顏乳",price:1180},
+            {cat:"超效保濕系列",name:"r-PGA超效保濕爆水氣墊面膜",price:1500},
+            // 生化系列
+            {cat:"生化系列",name:"生化潔皙麗膚水",price:2100},
+            {cat:"生化系列",name:"生化潔皙精華液",price:3900},
+            {cat:"生化系列",name:"生化潔皙精華霜",price:3300},
+            {cat:"生化系列",name:"生化潔皙隔離霜",price:2500},
+            {cat:"生化系列",name:"生化潔皙敷面組合",price:9700},
+            {cat:"生化系列",name:"生化平衡麗膚水",price:2100},
+            {cat:"生化系列",name:"生化平衡精華液",price:2300},
+            {cat:"生化系列",name:"生化平衡精華霜",price:3000},
+            {cat:"生化系列",name:"生化平衡隔離霜",price:2500},
+            {cat:"生化系列",name:"生化平衡敷面組合",price:9700},
+            {cat:"生化系列",name:"生化雪膚麗膚水",price:2100},
+            {cat:"生化系列",name:"生化雪膚精華液",price:3900},
+            {cat:"生化系列",name:"生化雪膚精華霜",price:2500},
+            {cat:"生化系列",name:"生化雪膚隔離霜",price:2500},
+            {cat:"生化系列",name:"生化雪膚敷面組合",price:9700},
+            {cat:"生化系列",name:"生化舒敏麗膚水",price:2100},
+            {cat:"生化系列",name:"生化舒敏精華液",price:2640},
+            {cat:"生化系列",name:"生化舒敏精華霜",price:2640},
+            {cat:"生化系列",name:"生化舒敏隔離霜",price:2500},
+            {cat:"生化系列",name:"生化舒敏敷面組合",price:9700},
+            {cat:"生化系列",name:"生化眼周精華液",price:3300},
+            {cat:"生化系列",name:"生化護唇露",price:1200},
+            {cat:"生化系列",name:"生化平衡潤膚霜",price:1780},
+            {cat:"生化系列",name:"生化更新凝露",price:1100},
+            {cat:"生化系列",name:"生化身體更新凝露",price:2100},
+            {cat:"生化系列",name:"生化保濕清潔乳",price:950},
+            {cat:"生化系列",name:"生化平衡清潔乳",price:950},
+            {cat:"生化系列",name:"生化保濕洗面乳",price:950},
+            {cat:"生化系列",name:"生化平衡洗面乳",price:950},
+            {cat:"生化系列",name:"水潤舒敏面膜",price:2200},
+            {cat:"生化系列",name:"物理性美白防曬乳",price:2350},
+            {cat:"生化系列",name:"物理性美白防曬隔離乳",price:2400},
+            {cat:"生化系列",name:"生化保濕蜜粉(膚色)",price:1500},
+            {cat:"生化系列",name:"生化保濕蜜粉(淺膚色)",price:1500},
+            // 漢方草本系列
+            {cat:"漢方草本系列",name:"海藻麗膚水",price:920},
+            {cat:"漢方草本系列",name:"海藻精華液",price:2400},
+            {cat:"漢方草本系列",name:"海藻美膚霜",price:1400},
+            {cat:"漢方草本系列",name:"海藻美膚隔離霜",price:1400},
+            {cat:"漢方草本系列",name:"海藻美膚面膜",price:1300},
+            {cat:"漢方草本系列",name:"海藻敷面組合",price:3560},
+            {cat:"漢方草本系列",name:"蜂膠清潔霜",price:780},
+            {cat:"漢方草本系列",name:"蜂膠清潔乳",price:400},
+            {cat:"漢方草本系列",name:"蜂膠麗膚水",price:920},
+            {cat:"漢方草本系列",name:"蜂膠精華液",price:2400},
+            {cat:"漢方草本系列",name:"蜂膠精華霜",price:1400},
+            {cat:"漢方草本系列",name:"蜂膠隔離霜",price:1400},
+            {cat:"漢方草本系列",name:"蜂膠精華面膜",price:1300},
+            {cat:"漢方草本系列",name:"蜂膠敷面組合",price:3560},
+            {cat:"漢方草本系列",name:"生氧清潔乳",price:400},
+            {cat:"漢方草本系列",name:"生氧麗膚水",price:920},
+            {cat:"漢方草本系列",name:"生氧精華液",price:2800},
+            {cat:"漢方草本系列",name:"生氧潤膚霜",price:1400},
+            {cat:"漢方草本系列",name:"生氧潤膚隔離霜",price:1400},
+            {cat:"漢方草本系列",name:"生氧潤膚面膜",price:1300},
+            {cat:"漢方草本系列",name:"生氧敷面組合",price:3560},
+            {cat:"漢方草本系列",name:"植物清潔霜",price:780},
+            {cat:"漢方草本系列",name:"植物清潔乳",price:400},
+            {cat:"漢方草本系列",name:"植物麗膚水",price:920},
+            {cat:"漢方草本系列",name:"植物精華液",price:2600},
+            {cat:"漢方草本系列",name:"植物潤膚霜",price:1500},
+            {cat:"漢方草本系列",name:"植物潤膚隔離霜",price:1400},
+            {cat:"漢方草本系列",name:"植物潤膚面膜",price:1300},
+            {cat:"漢方草本系列",name:"漢方植物敷面組合",price:3560},
+            {cat:"漢方草本系列",name:"潔膚霜(中油性)",price:490},
+            {cat:"漢方草本系列",name:"潔膚霜(中乾性)",price:490},
+            {cat:"漢方草本系列",name:"潔膚霜(敏弱)",price:490},
+            {cat:"漢方草本系列",name:"清潔乳液(中油性)",price:530},
+            {cat:"漢方草本系列",name:"清潔乳液(中乾性)",price:530},
+            {cat:"漢方草本系列",name:"清潔乳液(敏弱)",price:530},
+            {cat:"漢方草本系列",name:"美膚露(中油性)",price:1050},
+            {cat:"漢方草本系列",name:"美膚露(中乾姓)",price:1050},
+            {cat:"漢方草本系列",name:"美膚露(敏弱)",price:1050},
+            {cat:"漢方草本系列",name:"平衡麗膚霜",price:430},
+            {cat:"漢方草本系列",name:"平衡調理精華液",price:2200},
+            {cat:"漢方草本系列",name:"植物面皰精華霜",price:2050},
+            {cat:"漢方草本系列",name:"潤膚眼霜(B16)",price:1030},
+            {cat:"漢方草本系列",name:"護唇霜(B9)",price:870},
+            {cat:"漢方草本系列",name:"平衡潤膚霜(6A)",price:930},
+            {cat:"漢方草本系列",name:"護膚霜(B1)",price:640},
+            {cat:"漢方草本系列",name:"麗膚霜(6B2)",price:690},
+            {cat:"漢方草本系列",name:"潤膚霜(B42)",price:970},
+            // 專業系列
+            {cat:"專業系列",name:"滋潤化妝水(清爽型)",price:780},
+            {cat:"專業系列",name:"滋潤化妝水",price:780},
+            {cat:"專業系列",name:"保濕乳液(清爽型)",price:1500},
+            {cat:"專業系列",name:"保濕乳液(滋潤型)",price:1500},
+            {cat:"專業系列",name:"舒敏精華乳(第二代)",price:980},
+            {cat:"專業系列",name:"保濕除皺精華液",price:2380},
+            {cat:"專業系列",name:"眼部保濕凝露",price:1190},
+            {cat:"專業系列",name:"平衡面皰霜",price:730},
+            {cat:"專業系列",name:"水嫩喝水果凍",price:1620},
+            {cat:"專業系列",name:"玻尿酸保濕面膜組合",price:1950},
+            {cat:"專業系列",name:"C精華美膚洗面乳",price:630},
+            {cat:"專業系列",name:"C美白精華液",price:3250},
+            {cat:"專業系列",name:"嫩白C精華液",price:2050},
+            {cat:"專業系列",name:"頸部緊膚霜",price:930},
+            {cat:"專業系列",name:"頸部膚粉組合",price:930},
+            {cat:"專業系列",name:"蜂膠淨膚面膜組合",price:830},
+            {cat:"專業系列",name:"自然美防曬粉底",price:1400},
+            {cat:"專業系列",name:"自然美魔纖緊緻沐浴膠",price:1500},
+            {cat:"專業系列",name:"自然美魔纖緊緻精華",price:2500},
+            {cat:"專業系列",name:"自然美超魔曲著霜",price:3300},
+            {cat:"專業系列",name:"自然美超魔緊緻粉膜",price:3900},
+            {cat:"專業系列",name:"勻體磨砂霜",price:1350},
+            {cat:"專業系列",name:"勻體精華乳",price:1900},
+            {cat:"專業系列",name:"自然美物理性美白防曬乳(Body)",price:1100},
+            {cat:"專業系列",name:"天然精油洗手乳",price:570},
+            {cat:"專業系列",name:"金縷梅沐浴乳",price:340},
+            {cat:"專業系列",name:"酪梨油沐髮乳",price:350},
+            // 精油系列
+            {cat:"精油系列",name:"淨化複方精油",price:1350},
+            {cat:"精油系列",name:"平衡複方精油",price:1350},
+            {cat:"精油系列",name:"細緻毛孔複方精油",price:1350},
+            {cat:"精油系列",name:"雪膚複方精油",price:1350},
+            {cat:"精油系列",name:"煥顏複方精油",price:3000},
+            {cat:"精油系列",name:"舒敏複方精油",price:1350},
+            {cat:"精油系列",name:"亮眼複方精油",price:1350},
+            {cat:"精油系列",name:"緊膚複方精油",price:3000},
+            {cat:"精油系列",name:"舒緩按摩精油",price:2250},
+            {cat:"精油系列",name:"活絡舒壓按摩精油",price:2500},
+            {cat:"精油系列",name:"肌肉經絡按摩精油",price:2900},
+            {cat:"精油系列",name:"金品身心舒緩按摩油",price:3100},
+            {cat:"精油系列",name:"金品活絡舒壓按摩油",price:3100},
+            {cat:"精油系列",name:"金品愉悅放鬆按摩精油",price:3800},
+            {cat:"精油系列",name:"金品勻體盈嫩按摩精油",price:6000},
+            {cat:"精油系列",name:"金品豐潤緊實按摩精油",price:4300},
+            {cat:"精油系列",name:"金品臻白勻亮按摩精油",price:4300},
+            {cat:"精油系列",name:"金品女性舒緩按摩精油",price:4300},
+            {cat:"精油系列",name:"日光複方按摩精油",price:5900},
+            {cat:"精油系列",name:"月光複方按摩精油",price:5900},
+            {cat:"精油系列",name:"金/火象複方按摩精油",price:5900},
+            {cat:"精油系列",name:"木/土水象複方按摩精油",price:5900},
+            {cat:"精油系列",name:"頂級薰衣草精油",price:1550},
+            {cat:"精油系列",name:"頂級歐薄荷精油",price:1050},
+            {cat:"精油系列",name:"活絡舒壓水療浴油",price:3500},
+            {cat:"精油系列",name:"舒壓除勞水療浴油",price:2600},
+        ];
+
+        // 顏色配置
+        const CATEGORY_COLORS = {
+            '晶鑽系列': 'bg-gray-300 text-gray-800',
+            'NB-1御妍系列': 'bg-amber-800 text-white',
+            'NB-1青春系列': 'bg-yellow-500 text-white',
+            '山藥系列': 'bg-green-600 text-white',
+            'Dr.標靶系列': 'bg-teal-400 text-white',
+            '童妍水光系列': 'bg-red-500 text-white',
+            'NB-1胜肽水光': 'bg-purple-300 text-purple-900',
+            '超效保濕系列': 'bg-gray-700 text-white',
+            '生化系列': 'bg-purple-800 text-white',
+            '漢方草本系列': 'bg-lime-700 text-white',
+            '專業系列': 'bg-blue-600 text-white',
+            '精油系列': 'bg-indigo-600 text-white',
+        };
+
+        createApp({
+            data() {
+                return {
+                    currentTab: 'pos',
+                    categories: [],
+                    products: RAW_PRODUCTS,
+                    activeCategory: '',
+                    inventory: {}, // { 'Product Name': 10 }
+                    transactions: [],
+                    cart: [],
+                    isOutMode: true, // true = OUT (Red), false = IN (Green)
+                    isCartOpen: true,
+                    orderMemo: '',
+                    inventorySearch: '',
+                }
+            },
+            created() {
+                // 初始化分類
+                this.categories = [...new Set(this.products.map(p => p.cat))];
+                this.activeCategory = this.categories[0];
+                
+                // 讀取本地資料
+                const savedInv = localStorage.getItem('nb1_inventory');
+                if (savedInv) this.inventory = JSON.parse(savedInv);
+                
+                const savedTrans = localStorage.getItem('nb1_transactions');
+                if (savedTrans) this.transactions = JSON.parse(savedTrans);
+            },
+            computed: {
+                mode() {
+                    return this.isOutMode ? 'OUT' : 'IN';
+                },
+                filteredProducts() {
+                    return this.products.filter(p => p.cat === this.activeCategory);
+                },
+                filteredInventory() {
+                    if (!this.inventorySearch) return this.products;
+                    const term = this.inventorySearch.toLowerCase();
+                    return this.products.filter(p => p.name.toLowerCase().includes(term));
+                },
+                cartTotal() {
+                    return this.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                },
+                cartItemCount() {
+                    return this.cart.reduce((sum, item) => sum + item.qty, 0);
+                },
+                sortedTransactions() {
+                    return [...this.transactions].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                }
+            },
+            methods: {
+                getCategoryColor(cat) {
+                    return CATEGORY_COLORS[cat] || 'bg-gray-400 text-white';
+                },
+                formatPrice(price) {
+                    return price.toLocaleString();
+                },
+                formatDate(dateStr) {
+                    const d = new Date(dateStr);
+                    return `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+                },
+                getStock(name) {
+                    return this.inventory[name] || 0;
+                },
+                addToCart(product) {
+                    const existing = this.cart.find(item => item.name === product.name);
+                    if (existing) {
+                        existing.qty++;
+                    } else {
+                        this.cart.push({ ...product, qty: 1 });
+                    }
+                },
+                updateQty(index, change) {
+                    this.cart[index].qty += change;
+                    if (this.cart[index].qty <= 0) {
+                        this.cart.splice(index, 1);
+                    }
+                },
+                removeFromCart(index) {
+                    this.cart.splice(index, 1);
+                },
+                clearCart() {
+                    this.cart = [];
+                    this.orderMemo = '';
+                },
+                checkout() {
+                    if (this.cart.length === 0) return;
+
+                    const transaction = {
+                        id: Date.now(),
+                        timestamp: new Date().toISOString(),
+                        type: this.mode,
+                        items: JSON.parse(JSON.stringify(this.cart)), // Deep copy
+                        total: this.cartTotal,
+                        memo: this.orderMemo,
+                        isEditing: false,
+                        tempMemo: ''
+                    };
+
+                    // 更新庫存
+                    this.cart.forEach(item => {
+                        const current = this.inventory[item.name] || 0;
+                        if (this.mode === 'IN') {
+                            this.inventory[item.name] = current + item.qty;
+                        } else {
+                            this.inventory[item.name] = current - item.qty;
+                        }
+                    });
+
+                    this.transactions.push(transaction);
+                    this.saveToLocal();
+                    this.clearCart();
+                    alert('訂單已完成！');
+                },
+                deleteTransaction(record) {
+                    if(!confirm('確定要刪除此紀錄嗎？庫存將會自動校正回滾。')) return;
+
+                    // 自動校正庫存 (反向操作)
+                    record.items.forEach(item => {
+                        const current = this.inventory[item.name] || 0;
+                        // 如果原本是進貨(IN)，刪除時就要扣掉(OUT邏輯)
+                        // 如果原本是出貨(OUT)，刪除時就要加回(IN邏輯)
+                        if (record.type === 'IN') {
+                            this.inventory[item.name] = current - item.qty;
+                        } else {
+                            this.inventory[item.name] = current + item.qty;
+                        }
+                    });
+
+                    this.transactions = this.transactions.filter(t => t.id !== record.id);
+                    this.saveToLocal();
+                },
+                startEdit(record) {
+                    record.tempMemo = record.memo;
+                    record.isEditing = true;
+                },
+                saveEdit(record) {
+                    record.memo = record.tempMemo;
+                    record.isEditing = false;
+                    this.saveToLocal();
+                },
+                saveToLocal() {
+                    localStorage.setItem('nb1_inventory', JSON.stringify(this.inventory));
+                    localStorage.setItem('nb1_transactions', JSON.stringify(this.transactions));
+                }
+            }
+        }).mount('#app');
+        
+        // 註冊 Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(() => console.log('SW Registered'));
+        }
+    </script>
+</body>
+</html>
