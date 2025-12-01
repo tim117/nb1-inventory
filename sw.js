@@ -1,5 +1,5 @@
 // 修改第一行，將 v1 改成 v2, v3... 每次更新都要改
-const CACHE_NAME = 'nb1-inventory-v3'; 
+const CACHE_NAME = 'nb1-inventory-v4'; 
 
 const ASSETS = [
   './',
