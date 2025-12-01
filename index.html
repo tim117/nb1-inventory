@@ -18,11 +18,10 @@
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
         .safe-top { padding-top: env(safe-area-inset-top); }
         
-        /* 三段式切換按鈕樣式 */
         .mode-btn { transition: all 0.2s; }
-        .mode-active-in { background-color: #10B981; color: white; } /* 綠 */
-        .mode-active-out { background-color: #EF4444; color: white; } /* 紅 */
-        .mode-active-order { background-color: #3B82F6; color: white; } /* 藍 */
+        .mode-active-in { background-color: #10B981; color: white; }
+        .mode-active-out { background-color: #EF4444; color: white; }
+        .mode-active-order { background-color: #3B82F6; color: white; }
     </style>
 </head>
 <body class="bg-gray-100 h-screen overflow-hidden flex flex-col text-gray-800">
@@ -32,13 +31,11 @@
         <header class="bg-white shadow-sm z-20 safe-top flex-none">
             <div class="flex justify-between items-center px-4 py-3">
                 <h1 class="text-lg font-bold tracking-wide">NB-1 系統</h1>
-                
                 <div v-if="currentTab === 'pos'" class="flex bg-gray-200 rounded-lg p-1 text-xs font-bold">
                     <button @click="mode = 'IN'" class="px-3 py-1.5 rounded-md mode-btn" :class="mode === 'IN' ? 'mode-active-in shadow' : 'text-gray-500'">進貨</button>
                     <button @click="mode = 'OUT'" class="px-3 py-1.5 rounded-md mode-btn" :class="mode === 'OUT' ? 'mode-active-out shadow' : 'text-gray-500'">出貨</button>
                     <button @click="mode = 'ORDER'" class="px-3 py-1.5 rounded-md mode-btn" :class="mode === 'ORDER' ? 'mode-active-order shadow' : 'text-gray-500'">叫貨</button>
                 </div>
-
                 <div v-if="currentTab === 'inventory'" class="flex space-x-3">
                     <button @click="toggleLowStockFilter" :class="showLowStockOnly ? 'text-amber-500' : 'text-gray-400'">
                         <i class="fa-solid fa-filter"></i>
@@ -129,7 +126,6 @@
                     <i class="fa-regular fa-clipboard text-4xl mb-3"></i><br>
                     目前沒有叫貨單
                 </div>
-
                 <div v-for="order in pendingOrders" :key="order.id" class="bg-white p-4 rounded-xl shadow-sm mb-4 border-l-4 border-blue-500">
                     <div class="flex justify-between items-start mb-2">
                         <div>
@@ -140,21 +136,14 @@
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
-                    
-                    <div v-if="order.memo" class="mb-2 text-sm text-gray-600 bg-gray-50 p-2 rounded italic">
-                        {{ order.memo }}
-                    </div>
-
+                    <div v-if="order.memo" class="mb-2 text-sm text-gray-600 bg-gray-50 p-2 rounded italic">{{ order.memo }}</div>
                     <div class="border-t pt-2 mt-2 mb-3">
                         <div v-for="item in order.items" class="flex justify-between text-sm py-0.5">
                             <span class="text-gray-700 truncate w-2/3">{{ item.name }}</span>
                             <span class="font-mono">x{{ item.qty }}</span>
                         </div>
-                        <div class="text-right font-bold mt-2 pt-2 border-t border-dashed text-gray-600">
-                            總金額: ${{ formatPrice(order.total) }}
-                        </div>
+                        <div class="text-right font-bold mt-2 pt-2 border-t border-dashed text-gray-600">總金額: ${{ formatPrice(order.total) }}</div>
                     </div>
-
                     <button @click="receiveOrder(order)" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg shadow transition-colors flex items-center justify-center">
                         <i class="fa-solid fa-check-to-slot mr-2"></i> 確認到貨 (入庫)
                     </button>
@@ -200,35 +189,20 @@
             <div v-show="currentTab === 'history'" class="h-full flex flex-col bg-gray-100 p-4 overflow-y-auto pb-24">
                 <h2 class="text-xl font-bold mb-4 ml-1">交易紀錄</h2>
                 <div v-if="transactions.length === 0" class="text-center text-gray-400 mt-10">暫無紀錄</div>
-                
-                <div v-for="record in sortedTransactions" :key="record.id" class="bg-white p-4 rounded-xl shadow-sm mb-4 border-l-4" 
-                     :class="getTransactionColor(record.type)">
-                    
+                <div v-for="record in sortedTransactions" :key="record.id" class="bg-white p-4 rounded-xl shadow-sm mb-4 border-l-4" :class="getTransactionColor(record.type)">
                     <div class="flex justify-between items-start mb-2">
                         <div>
-                            <span class="text-xs font-bold px-2 py-1 rounded" 
-                                  :class="getTransactionBadgeClass(record.type)">
-                                {{ getTransactionLabel(record.type) }}
-                            </span>
+                            <span class="text-xs font-bold px-2 py-1 rounded" :class="getTransactionBadgeClass(record.type)">{{ getTransactionLabel(record.type) }}</span>
                             <span class="text-xs text-gray-400 ml-2">{{ formatDate(record.timestamp) }}</span>
                         </div>
-                        <button @click="deleteTransaction(record)" class="text-gray-400 hover:text-red-500 px-2">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+                        <button @click="deleteTransaction(record)" class="text-gray-400 hover:text-red-500 px-2"><i class="fa-solid fa-trash"></i></button>
                     </div>
-
                     <div class="mb-2 text-sm text-gray-600 bg-gray-50 p-2 rounded flex justify-between items-center group">
                         <span v-if="!record.isEditing" class="italic w-full">{{ record.memo || '無備註' }}</span>
                         <input v-else v-model="record.tempMemo" class="bg-white border p-1 rounded w-full text-sm" />
-                        
-                        <button v-if="!record.isEditing" @click="startEdit(record)" class="ml-2 text-gray-400 hover:text-blue-500">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                        <button v-else @click="saveEdit(record)" class="ml-2 text-green-500">
-                            <i class="fa-solid fa-check"></i>
-                        </button>
+                        <button v-if="!record.isEditing" @click="startEdit(record)" class="ml-2 text-gray-400 hover:text-blue-500"><i class="fa-solid fa-pen"></i></button>
+                        <button v-else @click="saveEdit(record)" class="ml-2 text-green-500"><i class="fa-solid fa-check"></i></button>
                     </div>
-
                     <div class="border-t pt-2 mt-2">
                         <div v-for="item in record.items" class="flex justify-between text-sm py-0.5">
                             <span class="text-gray-700 truncate w-2/3">{{ item.name }}</span>
@@ -237,46 +211,35 @@
                     </div>
                 </div>
             </div>
-
         </main>
 
         <nav class="bg-white border-t border-gray-200 flex justify-around items-center safe-bottom py-2 z-20">
             <button @click="currentTab = 'pos'" class="flex flex-col items-center p-2 w-1/4" :class="currentTab === 'pos' ? 'text-blue-600' : 'text-gray-400'">
-                <i class="fa-solid fa-cash-register text-xl mb-1"></i>
-                <span class="text-[10px]">作業</span>
+                <i class="fa-solid fa-cash-register text-xl mb-1"></i><span class="text-[10px]">作業</span>
             </button>
             <button @click="currentTab = 'orders'" class="flex flex-col items-center p-2 w-1/4" :class="currentTab === 'orders' ? 'text-blue-600' : 'text-gray-400'">
-                <div class="relative">
-                    <i class="fa-solid fa-truck-fast text-xl mb-1"></i>
-                    <span v-if="pendingOrders.length > 0" class="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full">{{ pendingOrders.length }}</span>
-                </div>
-                <span class="text-[10px]">叫貨單</span>
+                <div class="relative"><i class="fa-solid fa-truck-fast text-xl mb-1"></i><span v-if="pendingOrders.length > 0" class="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full">{{ pendingOrders.length }}</span></div><span class="text-[10px]">叫貨單</span>
             </button>
             <button @click="currentTab = 'inventory'" class="flex flex-col items-center p-2 w-1/4" :class="currentTab === 'inventory' ? 'text-blue-600' : 'text-gray-400'">
-                <i class="fa-solid fa-boxes-stacked text-xl mb-1"></i>
-                <span class="text-[10px]">庫存</span>
+                <i class="fa-solid fa-boxes-stacked text-xl mb-1"></i><span class="text-[10px]">庫存</span>
             </button>
             <button @click="currentTab = 'history'" class="flex flex-col items-center p-2 w-1/4" :class="currentTab === 'history' ? 'text-blue-600' : 'text-gray-400'">
-                <i class="fa-solid fa-clock-rotate-left text-xl mb-1"></i>
-                <span class="text-[10px]">紀錄</span>
+                <i class="fa-solid fa-clock-rotate-left text-xl mb-1"></i><span class="text-[10px]">紀錄</span>
             </button>
         </nav>
-
     </div>
 
     <script>
         const { createApp } = Vue;
-        
-        // 完整的產品清單
+
+        // --- 全新生成的產品列表 (256項) ---
         const RAW_PRODUCTS = [
-            // 晶鑽系列
-            {cat:"晶鑽系列",name:"NB-1晶鑽肽撫紋緊緻露",price:3800},
-            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力豐潤緊實精華",price:16800},
-            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力潤采凝萃",price:25000},
-            {cat:"晶鑽系列",name:"NB-1晶鑽彈力全效肌活霜",price:12500},
-            {cat:"晶鑽系列",name:"NB-1晶鑽彈力亮眼精華",price:8800},
-            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力亮眼緊緻霜",price:5800},
-            // NB-1御妍系列
+            {cat:"晶鑽系列",name:"NB-1晶鑽彈力肽撫紋緊緻露 EX",price:4280},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力潤采凝萃 EX",price:25000},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力豐潤緊實精華 EX",price:16800},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力亮眼精華 EX",price:8800},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力亮眼緊緻霜 EX",price:5800},
+            {cat:"晶鑽系列",name:"NB-1晶鑽肽彈力全效肌活霜 EX",price:12500},
             {cat:"NB-1御妍系列",name:"NB-1活膚精華露",price:3900},
             {cat:"NB-1御妍系列",name:"NB-1活膚賦活素",price:13600},
             {cat:"NB-1御妍系列",name:"NB-1抗皺緊膚霜",price:5000},
@@ -304,7 +267,6 @@
             {cat:"NB-1御妍系列",name:"NB-1 抗皺緊膚4D面膜",price:3480},
             {cat:"NB-1御妍系列",name:"NB-1 臻亮白皙精華液",price:5000},
             {cat:"NB-1御妍系列",name:"NB-1 盈采臻亮面膜",price:4000},
-            // NB-1青春系列
             {cat:"NB-1青春系列",name:"NB-1青春活膚膠原基酸精華液",price:4900},
             {cat:"NB-1青春系列",name:"NB-1青春撫紋精華乳",price:3200},
             {cat:"NB-1青春系列",name:"NB-1青春Q彈水潤乳",price:2980},
@@ -335,7 +297,6 @@
             {cat:"NB-1青春系列",name:"NB-1青春無瑕潤妍BB霜",price:2400},
             {cat:"NB-1青春系列",name:"NB-1胺基酸洗髮乳(油)",price:750},
             {cat:"NB-1青春系列",name:"NB-1胺基酸洗髮乳(乾)",price:750},
-            // 山藥系列
             {cat:"山藥系列",name:"山藥膠原潤膚露",price:2600},
             {cat:"山藥系列",name:"山藥膠原緊緻液",price:6400},
             {cat:"山藥系列",name:"山藥膠原緊緻霜",price:4400},
@@ -345,7 +306,6 @@
             {cat:"山藥系列",name:"山藥膠原緊緻專業面膜",price:5500},
             {cat:"山藥系列",name:"山藥膠原身體美膚凝乳",price:1980},
             {cat:"山藥系列",name:"山藥膠原局部緊膚凝乳",price:1980},
-            // Dr.標靶系列
             {cat:"Dr.標靶系列",name:"標靶水光胜肽抗皺精萃液",price:19800},
             {cat:"Dr.標靶系列",name:"標靶水光胜肽潔皙精萃液",price:15300},
             {cat:"Dr.標靶系列",name:"標靶水光胜肽亮采精萃液",price:13000},
@@ -362,16 +322,15 @@
             {cat:"Dr.標靶系列",name:"標靶細緻毛孔敷面粉膜",price:7200},
             {cat:"Dr.標靶系列",name:"標靶修護敷面粉膜",price:7200},
             {cat:"Dr.標靶系列",name:"標靶水光百萃修護凝凍",price:2300},
-            // 童妍水光系列
             {cat:"童妍水光系列",name:"童妍水光標靶極線立提晶萃",price:9900},
             {cat:"童妍水光系列",name:"童妍水光標靶極亮晶瓷晶萃",price:6500},
             {cat:"童妍水光系列",name:"童妍水光標靶極淨煥膚晶萃",price:6500},
             {cat:"童妍水光系列",name:"童妍水光標靶極能活護晶萃",price:6500},
-            // NB-1胜肽水光
             {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導機能液",price:3980},
             {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導原粹",price:13800},
             {cat:"NB-1胜肽水光",name:"胜肽水光標靶微導機能霜",price:7800},
-            // 超效保濕系列
+            {cat:"NB-1胜肽水光",name:"Dr. NB1水光泌齡靚白精萃液 5ml*5入",price:15800},
+            {cat:"NB-1胜肽水光",name:"Dr. NB1水光泌齡靚白精萃液 5ml*15入(自用)",price:45030},
             {cat:"超效保濕系列",name:"超效保濕水光精華露",price:2980},
             {cat:"超效保濕系列",name:"超效保濕水光精華液",price:2280},
             {cat:"超效保濕系列",name:"超效保濕甦活水凝霜",price:2180},
@@ -382,7 +341,8 @@
             {cat:"超效保濕系列",name:"超效保濕按摩卸妝膏",price:1180},
             {cat:"超效保濕系列",name:"超效保濕水光潔顏乳",price:1180},
             {cat:"超效保濕系列",name:"r-PGA超效保濕爆水氣墊面膜",price:1500},
-            // 生化系列
+            {cat:"其他系列",name:"85%胺基酸深層淨化洗面乳",price:1380},
+            {cat:"其他系列",name:"18%煥新靜膚酸精華",price:1680},
             {cat:"生化系列",name:"生化潔皙麗膚水",price:2100},
             {cat:"生化系列",name:"生化潔皙精華液",price:3900},
             {cat:"生化系列",name:"生化潔皙精華霜",price:3300},
@@ -417,7 +377,6 @@
             {cat:"生化系列",name:"物理性美白防曬隔離乳",price:2400},
             {cat:"生化系列",name:"生化保濕蜜粉(膚色)",price:1500},
             {cat:"生化系列",name:"生化保濕蜜粉(淺膚色)",price:1500},
-            // 漢方草本系列
             {cat:"漢方草本系列",name:"海藻麗膚水",price:920},
             {cat:"漢方草本系列",name:"海藻精華液",price:2400},
             {cat:"漢方草本系列",name:"海藻美膚霜",price:1400},
@@ -465,7 +424,6 @@
             {cat:"漢方草本系列",name:"護膚霜(B1)",price:640},
             {cat:"漢方草本系列",name:"麗膚霜(6B2)",price:690},
             {cat:"漢方草本系列",name:"潤膚霜(B42)",price:970},
-            // 專業系列
             {cat:"專業系列",name:"滋潤化妝水(清爽型)",price:780},
             {cat:"專業系列",name:"滋潤化妝水",price:780},
             {cat:"專業系列",name:"保濕乳液(清爽型)",price:1500},
@@ -493,7 +451,6 @@
             {cat:"專業系列",name:"天然精油洗手乳",price:570},
             {cat:"專業系列",name:"金縷梅沐浴乳",price:340},
             {cat:"專業系列",name:"酪梨油沐髮乳",price:350},
-            // 精油系列
             {cat:"精油系列",name:"淨化複方精油",price:1350},
             {cat:"精油系列",name:"平衡複方精油",price:1350},
             {cat:"精油系列",name:"細緻毛孔複方精油",price:1350},
@@ -520,6 +477,19 @@
             {cat:"精油系列",name:"頂級歐薄荷精油",price:1050},
             {cat:"精油系列",name:"活絡舒壓水療浴油",price:3500},
             {cat:"精油系列",name:"舒壓除勞水療浴油",price:2600},
+            {cat:"保健系列",name:"好強鈣",price:880},
+            {cat:"保健系列",name:"好元氣",price:880},
+            {cat:"保健系列",name:"好美妍飲",price:2780},
+            {cat:"保健系列",name:"好好睡",price:1880},
+            {cat:"保健系列",name:"好順暢粉",price:1980},
+            {cat:"保健系列",name:"好速活",price:1980},
+            {cat:"保健系列",name:"好靈敏",price:1880},
+            {cat:"保健系列",name:"好孅盈",price:1880},
+            {cat:"保健系列",name:"好舒息",price:1980},
+            {cat:"保健系列",name:"賦源強健養髮液 90ml",price:3680},
+            {cat:"保健系列",name:"賦源強健養髮液 90ml+補充瓶 200ml",price:8280},
+            {cat:"保健系列",name:"賦源強健養髮液 200ml(補充瓶)",price:4880},
+            {cat:"保健系列",name:"NB賦源強健洗髮露 500ml",price:880}
         ];
 
         const CATEGORY_COLORS = {
@@ -535,6 +505,8 @@
             '漢方草本系列': 'bg-lime-700 text-white',
             '專業系列': 'bg-blue-600 text-white',
             '精油系列': 'bg-indigo-600 text-white',
+            '保健系列': 'bg-pink-500 text-white',
+            '其他系列': 'bg-gray-500 text-white',
         };
 
         createApp({
@@ -635,8 +607,6 @@
                     if (type === 'CORRECT') return '盤點校正';
                     return '叫貨入庫';
                 },
-
-                // 核心邏輯
                 addToCart(product) {
                     const existing = this.cart.find(item => item.name === product.name);
                     if (existing) existing.qty++;
@@ -650,12 +620,8 @@
                     this.cart = [];
                     this.orderMemo = '';
                 },
-                
-                // 結帳/送單
                 checkout() {
                     if (this.cart.length === 0) return;
-
-                    // 1. 叫貨模式：只存入 pendingOrders，不改庫存
                     if (this.mode === 'ORDER') {
                         const order = {
                             id: Date.now(),
@@ -670,8 +636,6 @@
                         alert('叫貨單已建立！請至「叫貨單」分頁查看。');
                         return;
                     }
-
-                    // 2. 進出貨模式：直接改庫存
                     const transaction = {
                         id: Date.now(),
                         timestamp: new Date().toISOString(),
@@ -682,30 +646,22 @@
                         isEditing: false, 
                         tempMemo: ''
                     };
-
                     this.cart.forEach(item => {
                         const current = this.inventory[item.name] || 0;
                         if (this.mode === 'IN') this.inventory[item.name] = current + item.qty;
                         else this.inventory[item.name] = current - item.qty;
                     });
-
                     this.transactions.push(transaction);
                     this.saveToLocal();
                     this.clearCart();
                     alert(this.mode === 'IN' ? '進貨完成！' : '出貨完成！');
                 },
-
-                // 叫貨單功能：確認收貨
                 receiveOrder(order) {
                     if (!confirm('確認貨品已送達？這將會把數量加入庫存。')) return;
-
-                    // 1. 加庫存
                     order.items.forEach(item => {
                         const current = this.inventory[item.name] || 0;
                         this.inventory[item.name] = current + item.qty;
                     });
-
-                    // 2. 建立歷史紀錄 (標記為叫貨入庫)
                     const transaction = {
                         id: Date.now(),
                         timestamp: new Date().toISOString(),
@@ -717,10 +673,7 @@
                         tempMemo: ''
                     };
                     this.transactions.push(transaction);
-
-                    // 3. 從叫貨清單移除
                     this.pendingOrders = this.pendingOrders.filter(o => o.id !== order.id);
-                    
                     this.saveToLocal();
                     alert('已完成入庫！');
                 },
@@ -730,8 +683,6 @@
                         this.saveToLocal();
                     }
                 },
-
-                // 其他輔助功能 (盤點、刪除紀錄、CSV)
                 quickEditStock(prod) {
                     const currentQty = this.getStock(prod.name);
                     const newQtyStr = prompt(`盤點「${prod.name}」實際數量：`, currentQty);
@@ -739,7 +690,6 @@
                     const newQty = parseInt(newQtyStr);
                     if (isNaN(newQty) || newQty < 0) { alert("無效數字"); return; }
                     if (newQty === currentQty) return;
-
                     const transaction = {
                         id: Date.now(),
                         timestamp: new Date().toISOString(),
@@ -755,8 +705,6 @@
                 },
                 deleteTransaction(record) {
                     if(!confirm('刪除紀錄將自動校正庫存，確定？')) return;
-                    // 若是 "ORDER_IN" 或 "IN"，刪除要扣庫存
-                    // 若是 "OUT"，刪除要加庫存
                     if (record.type === 'CORRECT') {
                         alert('盤點紀錄僅刪除資料，不影響當前庫存');
                     } else {
@@ -793,17 +741,16 @@
         }).mount('#app');
         
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => {
-                     reg.onupdatefound = () => {
-                         const installingWorker = reg.installing;
-                         installingWorker.onstatechange = () => {
-                             if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                 console.log('New content is available; please refresh.');
-                             }
-                         };
-                     };
-                });
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            console.log('New content is available; please refresh.');
+                        }
+                    };
+                };
+            });
         }
     </script>
 </body>
